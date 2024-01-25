@@ -3,9 +3,10 @@ pub mod deserializer;
 pub mod payloads;
 pub mod security;
 
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{middleware::Logger, web, App, HttpResponse, HttpServer, Responder};
 use config::config_structs::AppConfig;
 
+use env_logger::Env;
 use payloads::authentification_structs::Login;
 use security::from_request_guard::JWTGuard;
 
@@ -44,10 +45,19 @@ async fn secured(guard: JWTGuard) -> impl Responder {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let config = config::manager::load_config().await;
+
+    // Define env var RUST_LOG or config administration.logger_scope to override the config.
+    // RUST_LOG will take the overwhelm on config file.
+    env_logger::Builder::from_env(
+        Env::default().default_filter_or(&config.administration.logger_scope),
+    )
+    .init();
+
     let config_for_server = config.clone();
     HttpServer::new(move || {
         let config = config_for_server.clone();
         App::new()
+            .wrap(Logger::default())
             .app_data(web::Data::new(config.clone()))
             .route("/login", web::post().to(login))
             .route("/secured", web::post().to(secured))
